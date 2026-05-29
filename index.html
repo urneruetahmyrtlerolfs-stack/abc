@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>种子生长大挑战</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            height: 100vh;
+            background-color: #f0f8ff;
+            font-family: 'Microsoft YaHei', sans-serif;
+            overflow: hidden;
+            background: linear-gradient(to bottom, #e0f7fa, #80deea);
+        }
+
+        #top-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }
+
+        h1 {
+            color: #00796b;
+            margin-bottom: 20px;
+            text-shadow: 1px 1px 2px white;
+        }
+
+        #target-image {
+            width: 350px;
+            height: 350px;
+            border: 5px dashed #4db6ac;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: rgba(255, 255, 255, 0.9);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        #target-image img {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+            transition: transform 0.5s ease;
+        }
+
+        #target-image.drag-over {
+            border-color: #00897b;
+            background-color: #e0f2f1;
+            transform: scale(1.05);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+        }
+
+        #bottom-container {
+            width: 100%;
+            padding: 30px;
+            background-color: rgba(255, 255, 255, 0.85);
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            border-top: 3px solid #4db6ac;
+            box-shadow: 0 -5px 15px rgba(0,0,0,0.05);
+        }
+
+        .draggable-img {
+            width: 110px;
+            height: 110px;
+            cursor: grab;
+            border: 3px solid #fff;
+            border-radius: 12px;
+            padding: 5px;
+            background: white;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .draggable-img:hover {
+            transform: translateY(-10px) rotate(3deg);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+            border-color: #4db6ac;
+        }
+
+        .draggable-img:active {
+            cursor: grabbing;
+        }
+
+        #message-box {
+            position: fixed;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 32px;
+            font-weight: bold;
+            color: #d32f2f;
+            background: rgba(255,255,255,0.95);
+            padding: 20px 40px;
+            border-radius: 50px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            z-index: 1000;
+            border: 4px solid #ffeb3b;
+            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        #reset-btn {
+            padding: 12px 30px;
+            font-size: 20px;
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+
+        #reset-btn:hover {
+            background-color: #45a049;
+            transform: scale(1.1);
+            box-shadow: 0 6px 15px rgba(0,0,0,0.3);
+        }
+
+        #reset-btn:active {
+            transform: scale(0.95);
+        }
+
+        @keyframes popIn {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+
+        .growth-animation {
+            animation: grow 0.6s ease-out;
+        }
+
+        @keyframes grow {
+            0% { transform: scale(0.8); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="message-box">
+        <div id="message-text"></div>
+        <button id="reset-btn" onclick="resetGame()">重新种植</button>
+    </div>
+
+    <div id="top-container">
+        <h1>种子生长大挑战</h1>
+        <div id="target-image" ondrop="drop(event)" ondragover="allowDrop(event)" ondragleave="dragLeave(event)">
+            <img id="seed-img" src="1.jpg" alt="种子">
+        </div>
+    </div>
+
+    <div id="bottom-container">
+        <!-- 6-12 images will be generated here -->
+    </div>
+
+    <audio id="audio-correct" src="正确音效.mp3"></audio>
+    <audio id="audio-error" src="错误音效.mp3"></audio>
+
+    <script>
+        const correctImages = [6, 7, 8, 9];
+        const errorImages = [10, 11, 12];
+        let currentStage = 1; // 1 -> 2 -> 3 -> 4 -> 5
+        let usedCorrectImages = new Set();
+
+        const bottomContainer = document.getElementById('bottom-container');
+        const seedImg = document.getElementById('seed-img');
+        const audioCorrect = document.getElementById('audio-correct');
+        const audioError = document.getElementById('audio-error');
+        const messageBox = document.getElementById('message-box');
+
+        const allSources = [6, 7, 8, 9, 10, 11, 12];
+        // Shuffle images to make it more like a game
+        allSources.sort(() => Math.random() - 0.5);
+
+        // Helper to get image path with correct extension and cache busting
+        function getImagePath(num) {
+            const ext = num === 3 ? 'png' : 'jpg';
+            return `${num}.${ext}?v=${Date.now()}`;
+        }
+
+        allSources.forEach(num => {
+            const img = document.createElement('img');
+            img.src = getImagePath(num);
+            img.className = 'draggable-img';
+            img.draggable = true;
+            img.id = `img-${num}`;
+            img.alt = `条件${num}`;
+            
+            // Touch support (simplified)
+            img.addEventListener('dragstart', drag);
+            
+            bottomContainer.appendChild(img);
+        });
+
+        function allowDrop(ev) {
+            ev.preventDefault();
+            document.getElementById('target-image').classList.add('drag-over');
+        }
+
+        function dragLeave(ev) {
+            document.getElementById('target-image').classList.remove('drag-over');
+        }
+
+        function drag(ev) {
+            ev.dataTransfer.setData("text", ev.target.id);
+        }
+
+        function drop(ev) {
+            ev.preventDefault();
+            document.getElementById('target-image').classList.remove('drag-over');
+            const data = ev.dataTransfer.getData("text");
+            const draggedElement = document.getElementById(data);
+            if (!draggedElement) return;
+            
+            const draggedNum = parseInt(data.split('-')[1]);
+
+            if (correctImages.includes(draggedNum)) {
+                if (!usedCorrectImages.has(draggedNum)) {
+                    handleCorrect(draggedNum);
+                }
+            } else {
+                handleError();
+            }
+        }
+
+        function handleCorrect(num) {
+            usedCorrectImages.add(num);
+            currentStage++;
+            
+            // Play sound
+            audioCorrect.currentTime = 0;
+            audioCorrect.play().catch(e => console.log("Audio play failed:", e));
+
+            // Confetti explosion effect (burst and disappear)
+            const count = 200;
+            const defaults = {
+                origin: { y: 0.7 },
+                spread: 360,
+                ticks: 50, // Reduced ticks to make it disappear faster
+                gravity: 0, // No gravity, won't fall
+                decay: 0.94, // Faster decay to disappear quickly
+                startVelocity: 30,
+                shapes: ['circle', 'square'],
+                colors: ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF']
+            };
+
+            function fire(particleRatio, opts) {
+                confetti(Object.assign({}, defaults, opts, {
+                    particleCount: Math.floor(count * particleRatio)
+                }));
+            }
+
+            fire(0.25, { spread: 26, startVelocity: 55 });
+            fire(0.2, { spread: 60 });
+            fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
+            fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+            fire(0.1, { spread: 120, startVelocity: 45 });
+
+            // Growth animation
+            seedImg.classList.remove('growth-animation');
+            void seedImg.offsetWidth; // trigger reflow
+            seedImg.classList.add('growth-animation');
+            seedImg.src = getImagePath(currentStage);
+
+            // Hide the used image
+            document.getElementById(`img-${num}`).style.opacity = '0.3';
+            document.getElementById(`img-${num}`).style.pointerEvents = 'none';
+
+            if (currentStage === 5) {
+                const msg = "恭喜你的小番茄种植成功啦！";
+                setTimeout(() => {
+                    showMessage(msg);
+                    speak(msg);
+                }, 1000);
+            }
+        }
+
+        function handleError() {
+            audioError.currentTime = 0;
+            audioError.play().catch(e => console.log("Audio play failed:", e));
+            
+            // Shake effect on target
+            const target = document.getElementById('target-image');
+            target.style.borderColor = '#f44336';
+            setTimeout(() => {
+                target.style.borderColor = '#4db6ac';
+            }, 500);
+        }
+
+        function showMessage(text) {
+            document.getElementById('message-text').innerText = text;
+            messageBox.style.display = 'flex';
+        }
+
+        function resetGame() {
+            // Reset state
+            currentStage = 1;
+            usedCorrectImages.clear();
+            
+            // Reset images
+            seedImg.src = getImagePath(1);
+            seedImg.classList.remove('growth-animation');
+            
+            // Reset bottom buttons
+            const draggableImgs = document.querySelectorAll('.draggable-img');
+            draggableImgs.forEach(img => {
+                img.style.opacity = '1';
+                img.style.pointerEvents = 'auto';
+            });
+            
+            // Hide message box
+            messageBox.style.display = 'none';
+            
+            // Shuffle images again
+            const nodes = Array.from(bottomContainer.children);
+            nodes.sort(() => Math.random() - 0.5);
+            nodes.forEach(node => bottomContainer.appendChild(node));
+        }
+
+        function speak(text) {
+            if ('speechSynthesis' in window) {
+                // Cancel any ongoing speech
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'zh-CN';
+                utterance.rate = 1;
+                window.speechSynthesis.speak(utterance);
+            } else {
+                console.log("Speech synthesis not supported");
+            }
+        }
+    </script>
+</body>
+</html>
